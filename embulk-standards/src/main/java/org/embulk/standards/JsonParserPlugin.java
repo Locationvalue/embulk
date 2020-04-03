@@ -7,14 +7,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
 import org.embulk.config.Config;
 import org.embulk.config.ConfigDefault;
 import org.embulk.config.ConfigSource;
@@ -85,6 +82,10 @@ public class JsonParserPlugin implements ParserPlugin {
         @ConfigDefault("false")
         boolean getFlattenJsonArray();
 
+        @Config("flatten_json_array_with_original_data")
+        @ConfigDefault("false")
+        boolean getFlattenJsonArrayWithOriginalData();
+
         @Config("columns")
         @ConfigDefault("null")
         Optional<SchemaConfig> getSchemaConfig();
@@ -151,7 +152,20 @@ public class JsonParserPlugin implements ParserPlugin {
                                                     "A Json record must represent array value with '__experimental__flatten_json_array' option, but it's %s",
                                                     value.getValueType().name()));
                                 }
-                                recordValues = value.asArrayValue();
+                                if(task.getFlattenJsonArrayWithOriginalData()) {
+                                    final List<Value> flattended = new ArrayList<>();
+                                    for(Value v:value.asArrayValue()) {
+                                        final ValueFactory.MapBuilder mb = ValueFactory.newMapBuilder();
+                                        final Map<Value,Value> originalmap = originalValue.asMapValue().map();
+                                        final Map<Value,Value> valuemap = v.asMapValue().map();
+                                        mb.putAll(originalmap);
+                                        mb.putAll(valuemap);
+                                        flattended.add(mb.build());
+                                    }
+                                    recordValues = flattended;
+                                } else {
+                                    recordValues = value.asArrayValue();
+                                }
                             } else {
                                 recordValues = Collections.singletonList(value);
                             }
